@@ -1,6 +1,6 @@
 LATEX=pdflatex
 
-PDF=introduction.pdf porting.pdf memory.pdf kernels.pdf shared.pdf cuda_mpi.pdf async.pdf miniapp.pdf cuda2d.pdf miniapp_intro.pdf
+PDF=introduction.pdf porting.pdf runtime_api.pdf memory.pdf kernels.pdf shared.pdf cuda_mpi.pdf async.pdf miniapp.pdf cuda2d.pdf miniapp_intro.pdf
 
 all: images ${PDF}
 
@@ -9,6 +9,9 @@ porting.pdf: beamerthemeCSCS.sty images porting.tex
 
 introduction.pdf: beamerthemeCSCS.sty images introduction.tex
 	$(LATEX) introduction.tex
+
+runtime_api.pdf: beamerthemeCSCS.sty images runtime_api.tex
+	$(LATEX) runtime_api.tex
 
 memory.pdf: beamerthemeCSCS.sty images memory.tex
 	$(LATEX) memory.tex
