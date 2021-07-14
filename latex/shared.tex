@@ -34,7 +34,7 @@
 % Please use the predifined colors:
 % cscsred, cscsgrey, cscsgreen, cscsblue, cscsbrown, cscspurple, cscsyellow, cscsblack, cscswhite
 
-\author{Ben Cumming, CSCS}
+\author{Javier Otero, CSCS}
 \title{Writing GPU Kernels}
 \subtitle{}
 \date{\today}
@@ -45,7 +45,7 @@
 \cscstitle
 
 % CHAPTER SLIDE
-\cscschapter{Going Parallel: Working Together}
+\cscschapter{Going Parallel: Thread Cooperation}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]{}
@@ -93,57 +93,143 @@ void twice_blur(float *in, float *out, int n){
 \end{frame}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\begin{frame}[fragile]{Block Level Synchronization}
+\begin{frame}[fragile]{Types of Cooperation}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    \begin{columns}[T]
-        \begin{column}{0.3\textwidth}
-            \centering
-            \includegraphics[width=\textwidth]{./images/smx.pdf}
-
-            The P100 SMX has 64 KB of shared memory
-        \end{column}
-
-        \begin{column}{0.7\textwidth}
-            CUDA provides mechanisms for \emph{cooperation between threads in a thread block}.
-            \begin{itemize}
-                \item All threads in a block run on the same SMX
-                \item Resources for synchronization are at SMX level
-                \item No synchronization between threads in different blocks
-            \end{itemize}
-            CUDA also supports global \emph{atomic operations} for coordination between threads
-            \begin{itemize}
-                \item We will cover this later\dots
-            \end{itemize}
-        \end{column}
-    \end{columns}
+\begin{itemize}
+        \item \emph{Cooperation between threads in a thread block}:
+        \begin{itemize}
+            \item All threads in a block run on the same SM
+            \item Shared resources such as L1 cache and shared memory
+            \item CUDA provides mechanisms for synchronization at the block level and lower
+            \item No necessary synchronization between threads in different blocks
+        \end{itemize}
+        \vspace{0.5cm}
+        \item \emph{Cooperation between different blocks}:
+        \begin{itemize}
+            \item Cooperation must occur through global memory
+            \item CUDA supports \textit{atomic operations}
+        \end{itemize}
+\end{itemize}
 
 \end{frame}
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\begin{frame}[fragile]{Block Level Synchronization}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        Cooperation between threads requires sharing of data
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]{Block Level Cooperation}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+Cooperating through \emph{shared memory}:
+\begin{itemize}
+    \item Shared memory is simply a user-managed cache
+    \item Threads in a block can see the same shared memory
+    \item Shared memory is not visible to threads in other blocks executing on the same SM
+    \item Shared memory is a limited resource (\emph{64 KB/SM on a P100}):
+    \begin{itemize}
+        \item Shared memory usage per block limits how many blocks can run simultaneously on an SM
+        \item One thread block can allocate 64 KB for itself\dots
+        \item \dots two thread blocks can allocate 32 KB each
+    \end{itemize}
+\end{itemize}
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]{Shared Memory}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    \begin{itemize}
+        \item What changes with different GPU architectures:
         \begin{itemize}
-            \item All threads in a block can share data using \emph{shared memory}.
-            \item Shared memory is \emph{not visible} to threads in other thread blocks.
-            \item All threads in a block are on the same SMX.
-            \item There is 64 KB of shared memory on each SMX
+            \item P100: L1 cache and shared mem. have \emph{fixed} sizes
+            \item A100 \& V100: L1 cache and shared mem. are now unified and their portion is \emph{configurable}
+            \item 64KB/SM on a P100 and up to 128KB/SM on an A100
+        \end{itemize}
+        \vspace{0.25cm}
+        \item What does not change from P100 upwards:
             \begin{itemize}
-                \item one thread block can allocate 64 KB for itself
-                \item two thread blocks can allocate 32 KB each\dots
-                \item \dots shared memory per thread block is a constraint on how many thread blocks can run simultaneously on an SMX.
+                \item Shared memory is divided in 32 equal memory banks, where 32-bit words map to successive banks
+                \item Each memory bank has a bandwidth of 32 bits/cycle
+                \item When more than one thread writes to the same bank the write operations are serialized (\emph{bank conflicts})
             \end{itemize}
         \end{itemize}
 
 \end{frame}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]{Moving Data To and From Shared Memory}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    \begin{itemize}
+        \item P100, V100 and A100 coalesce global memory access into 32 byte transactions:
+        \begin{itemize}
+            \item For example, a block with 32 threads reading 1 \lst{float} per thread requires only 4 global memory transactions (if and only if the \lst{float}s are consecutive in global memory)
+            \item Each of these \lst{float}s gets placed into consecutive shared memory banks without any bank conflicts
+        \end{itemize}
+        \vspace{0.25cm}
+        \item Things to watch out for:
+            \begin{itemize}
+                \item When reading strided data, part of that 32 byte memory transaction will go unused
+                \item This will decrease the effective memory bandwidth
+            \end{itemize}
+        \end{itemize}
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]{Copy Kernel w/ Shared Memory}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    \begin{itemize}
+        \item Do we need shared memory for this? Nope.
+        \item This kernel is launched as usual.
+        \item What if \lst{DECIMATE > 1}?
+        \item Have we got any memory bank conflicts?
+    \end{itemize}
+
+    \begin{code}{A naive downsampling kernel}
+        \begin{lstlisting}[style=boxcudatiny]
+template <int BSIZE, int DECIMATE=1>
+__global__ void downsample(const float* in, float* out, int n){
+
+  // Allocate shared memory statically
+  __shared__ float buffer[BSIZE];
+
+  auto idx = threadIdx.x + blockIdx.x * BSIZE;
+
+  // Coalesced reads - no bank conflicts
+  if (idx < n)
+    buffer[threadIdx.x] = in[idx * DECIMATE];
+
+  __syncthreads();
+
+  // Coalesced writes
+  if (idx < n)
+    out[idx] = buffer[threadIdx.x];
+}
+        \end{lstlisting}
+    \end{code}
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]{Synchronizing threads}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    What does \lst{__syncthreads()} do?
+    
+    \begin{itemize}
+        \item All threads in the block wait for each other to finish loading data into shared memory.
+        \item Only after \lst{__syncthreads()} the memory read by other threads is guaranteed to be visible to all other threads in the block.
+        \item Do we need synchronization in this example? There's no thread cooperation, so ... nope!
+        \item What might happen if we place the sync inside the if statement?
+        
+    \end{itemize}
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]{1D blur kernel}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    A simple intensity preserving filter:
-    \centering $\text{out}_i \leftarrow 0.25\times(\text{in}_{i-1}+2\times\text{in}_i+\text{in}_{i+1})$
+    A simple stencil operation:
+
+    \centering $\text{out}_i = 0.25\times(\text{in}_{i-1}+2\times\text{in}_i+\text{in}_{i+1})$
+    \smallskip
+
     \begin{itemize}
-        \item Each output value is a linear combination of neighbours in input array
+        \item Each output value is a linear combination of neighbors in input array
         \item First we look at naive implementation
     \end{itemize}
 
@@ -162,13 +248,12 @@ void blur(double *in, double *out, int n){
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]{1D blur kernel on GPU}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    \begin{center}
-        Our first CUDA implementation of the blur kernel has each thread load the three values required to form its output
-    \end{center}
+    Our first CUDA implementation of the blur kernel has each thread load the three values required to form its output\\
+    
     \begin{code}{First implementation of blur kernel}
         \begin{lstlisting}[style=boxcudatiny]
 __global__ void
-blur(const double *in, double* out, int n) {
+blur(const double* in, double* out, int n) {
   int i = threadIdx.x + 1; // assume one thread block
 
   if(i<n-1) {
@@ -183,11 +268,17 @@ blur(const double *in, double* out, int n) {
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]{}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    \centering
-    Each thread has to load 3 values from global memory to calculate its output \\
-    \includegraphics[width=0.8\textwidth]{./images/blur_point_gather.pdf} \\
-    Alternatively, each value in the input array has to be loaded 3 times \\
-    \includegraphics[width=0.8\textwidth]{./images/blur_point_scatter.pdf} \\
+    Each thread has to load 3 values from global (?) memory to calculate its output \\
+
+    \begin{center}
+        \includegraphics[width=0.8\textwidth]{./images/blur_point_gather.pdf}
+    \end{center}
+
+    Alternatively, each value in the input array has to be added 3 times into the output array (why is this far worse than the above approach?)\\
+
+    \begin{center}
+        \includegraphics[width=0.8\textwidth]{./images/blur_point_scatter.pdf}
+    \end{center}
 \end{frame}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -210,11 +301,12 @@ blur(const double *in, double* out, int n) {
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]{}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    \begin{code}{Blur kernel with shared memory}
+    \begin{code}{Blur kernel with shared memory - single thread block}
         \begin{lstlisting}[style=boxcudatiny]
+template<int BSIZE>
 __global__
-void blur_shared_block(double *in, double* out, int n) {
-    extern __shared__ double buffer[];
+void blur_shared_block(const double* in, double* out, int n) {
+    __shared__ double buffer[BSIZE];
 
     auto i = threadIdx.x + 1;
 
@@ -233,21 +325,11 @@ void blur_shared_block(double *in, double* out, int n) {
 }
         \end{lstlisting}
     \end{code}
-
-\end{frame}
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\begin{frame}[fragile]{Synchronizing threads}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    The built-in CUDA function \lst{__syncthreads()} creates a barrier, where all threads in a thread block synchronize.
     \begin{itemize}
-        \item Threads wait for all threads in thread block to finish loading shared memory buffer.
+        \item Do we need synchronization in this example? Yes!
         \item Thread $i$ needs to wait for threads $i-1$ and $i+1$ to load values into \lst{buffer}.
-        \item Synchronization required to avoid race conditions.
-        \begin{itemize}
-            \item Threads have to wait for other threads to fill \lst{buffer}.
-        \end{itemize}
     \end{itemize}
+
 \end{frame}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -255,8 +337,18 @@ void blur_shared_block(double *in, double* out, int n) {
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     There are two ways to declare shared memory allocations.
 
+    \begin{info}{Static allocation}
+        When the amount of memory is known at compile time:
+
+        \centering \lst{__shared__ double buffer[128];}
+        \begin{itemize}
+            \item Here there are 128 double-precision values (1024 bytes) of memory shared by all threads.
+        \end{itemize}
+    \end{info}
+
     \begin{info}{Dynamic allocation}
         When the memory is determined at run time:
+
         \centering \lst{extern __shared__ double buffer[];}
         \begin{itemize}
             \item Note the \lst{extern} keyword.
@@ -264,82 +356,56 @@ void blur_shared_block(double *in, double* out, int n) {
         \end{itemize}
     \end{info}
 
-    \begin{info}{Static allocation}
-        When the amount of memory is known at compile time:
-        \centering \lst{__shared__ double buffer[128];}
-        \begin{itemize}
-            \item Here there are 128 double-precision values (1024 bytes) of memory shared by all threads.
-        \end{itemize}
-    \end{info}
-
 \end{frame}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]{Launching with static shared memory}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    The amount of shared memory should be sufficient for the number of threads.
+    \begin{itemize}
+        \item Always need to allocate enough shared memory for the given block size.
+        \item Our \lst{blur_shared_block} kernel needed 2 extra elements ($num\_threads$ + 2)
+    \end{itemize}
+    \smallskip
 
-    \begin{code}{Using compile time bounds}
+    \begin{code}{Launching our blur\_shared\_block kernel}
         \begin{lstlisting}[style=boxcudatiny]
-template <int THREADS>
-__global__
-void kernel(...) {
-  __shared__ double buffer[THREADS];
-
-  // ... THREADS must equal blockDim.x
-}
-
-// launch kernel with threads per block as a template parameter
-kernel<128>@<<<@num_blocks, 128@>>>@(...);
+// Setting the block size to 128 threads
+auto n = 128;
+blur_shared_block<128+2>@<<<@num_blocks, n@>>>@(x0, x1, n);
         \end{lstlisting}
     \end{code}
 \end{frame}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\begin{frame}[fragile]{Launching with static shared memory}
+\begin{frame}[fragile]{Launching with dynamic shared memory}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    It is possible to allocate multiple variables as shared memory.
-    \begin{itemize}
-        \item   If the shared memory is used separately, you can use a union to ``overlap'' the storage.
-        \item   Shared memory is a limited resource.
-    \end{itemize}
+        An additional parameter is added to the launch syntax
+        \\
+        \centering \lst{blur_shared``<<<``grid_dim, block_dim, shared_size``>>>``(...);}
+        \begin{itemize}
+            \item \lst{shared_size} is the shared memory \emph{in bytes} to be dynamically allocated \emph{per thread block}
+        \end{itemize}
 
-    \begin{columns}[T]
-        \begin{column}{0.48\textwidth}
-            \begin{code}{separate storage}
-                \begin{lstlisting}[style=boxcudatiny]
+    \begin{code}{Launch blur kernel with shared memory}
+        \begin{lstlisting}[style=boxcudatiny]
 __global__
-void kernel1() {
-  // 1536 bytes
-  __shared__ int X[128];
-  __shared__ double Y[128];
+void blur_shared(double *in, double* out, int n) {
+  extern __shared__ double buffer[];
 
-  // OK
-  X[i] = (int)Y[i];
+  int i = threadIdx.x + 1;
+  // ...
 }
-                 \end{lstlisting}
-            \end{code}
-        \end{column}
 
-        \begin{column}{0.48\textwidth}
-            \begin{code}{overlapping storage}
-                \begin{lstlisting}[style=boxcudatiny]
-__global__
-void kernel2(int n) {
-  // 1024 bytes
-  __shared__ union {
-    int X[128];
-    double Y[128];
-  } buf;
+// in main()
+auto block_dim = n;
+auto size_in_bytes = (n+2)*sizeof(double);
 
-  // not OK
-  buf.X[i] = (int)buf.Y[i];
-}
-                \end{lstlisting}
-            \end{code}
-        \end{column}
-    \end{columns}
+blur_shared@<<<@1, block_dim, size_in_bytes@>>>@(x0, x1, n);
+        \end{lstlisting}
+    \end{code}
+
 \end{frame}
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]{Finding resource usage of kernels}
@@ -367,137 +433,53 @@ ptxas info  : Used 6 registers, 1536 bytes smem, 320 bytes cmem[0]
 kernel2(int)
     \end{lstlisting}
     \end{terminal}
-    \emph{Note}: the kernel names have been mangled (use \lstterm{c++filt}.)
-
-\end{frame}
-
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\begin{frame}[fragile]{Launching with dynamic shared memory}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        An additional parameter is added to the launch syntax
-        \\
-        \centering \lst{blur``<<<``grid_dim, block_dim, shared_size``>>>``(...);}
-        \begin{itemize}
-            \item \lst{shared_size} is the shared memory \emph{in bytes} to be allocated \emph{per thread block}
-        \end{itemize}
-
-    \begin{code}{Launch blur kernel with shared memory}
-        \begin{lstlisting}[style=boxcudatiny]
-__global__
-void blur_shared(double *in, double* out, int n) {
-  extern __shared__ double buffer[];
-
-  int i = threadIdx.x + 1;
-  // ...
-}
-
-// in main()
-auto block_dim = n-2;
-auto size_in_bytes = n*sizeof(double);
-
-blur_shared@<<<@1, block_dim, size_in_bytes@>>>@(x0, x1, n);
-        \end{lstlisting}
-    \end{code}
+    \emph{Note}: the kernel names have been mangled
 
 \end{frame}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\begin{frame}[fragile]{}
+\begin{frame}[fragile]{Back to our blur kernel}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        A version of the blur kernel for arbitrarily large $n$ is provided in \lst{blur.cu} in the example code. The implementation is a bit awkward:
+        A version of the blur kernel for arbitrarily large $n$ is provided in \lst{blur.cu} in the example code. One relevant thing to note is:
         \begin{itemize}
-            \item  the \lst{in} and \lst{out} arrays use global indexes
-            \item  the shared memory uses thread block local indexes
+            \item  the \lst{in} and \lst{out} arrays use global indexes\dots
+            \item  \dots and the shared memory uses thread block local indexes
         \end{itemize}
 
-    \begin{info}{Is it worth it?}
+    \begin{info}{and all this for ... no speedup at all?}
         \begin{itemize}
-            \item on Keplar this optimization was worth $\approx$10\%.
-            \item on P100 there is no speedup (I think due to improved read only L1 caching on P100)
+            \item This kernel operates on consecutive memory.
+            \item Coalesced reads and writes.
+            \item Turns out that L1 cache does a pretty good job!
+            \item You might get some speedup if you try this out in a very old GPU.
+            \begin{itemize}
+                \item GPUs prior to P100 do not cache on L1 by default.
+            \end{itemize}
         \end{itemize}
-        The small performance improvement on Keplar was worth it if this was a key kernel in your application\dots
     \end{info}
 
 \end{frame}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\begin{frame}[fragile]{}
+\begin{frame}[fragile]{Fusing kernels}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    \begin{info}{Buffering}
-        A pipelined workflow uses the output of one ``kernel'' as the input of another
+    \begin{itemize}
+        \item Sometimes a workflow uses the output of one kernel as the input of another.
         \begin{itemize}
             \item On the CPU these can be optimized by keeping the intermediate result in cache for the second kernel.
+            \item On the GPU one can fuse the two operations into the same kernel and use shared memory.
         \end{itemize}
-        e.g. two stencils, one applied to the output of the first.
-    \end{info}
-
-    \begin{code}{Double blur: naive OpenMP}
+        \item An example: two concatenated stencil operations.
+    \begin{code}{Naive double-blur}
         \begin{lstlisting}[style=boxcudatiny]
-void blur_twice(const double* in , double* out , int n) {
-  static double* buffer = malloc_host<double>(n);
-
-  @#pragma omp parallel for@
-  for(auto i=1; i<n-1; ++i) {
-    buffer[i] = 0.25*( in[i-1] + 2.0*in[i] + in[i+1]);
-  }
-  @#pragma omp parallel for@
-  for(auto i=2; i<n-2; ++i) {
-    out[i] = 0.25*( buffer[i-1] + 2.0*buffer[i] + buffer[i+1]);
-  }
-}
+// Setting the block size to 128 threads
+auto n = 128;
+blur_shared_block<128+2>@<<<@num_blocks, n@>>>@(x0, x1, n);
+blur_shared_block<128+2>@<<<@num_blocks, n@>>>@(x0, x1, n);
         \end{lstlisting}
     \end{code}
-
-\end{frame}
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\begin{frame}[fragile]{}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %For a host implementation break work into blocks, to keep intermediate results in \lst{buffer} in cache.
-    \begin{code}{Double blur: OpenMP with blocking for cache}
-        \begin{lstlisting}[style=boxcudatiny]
-void blur_twice(const double* in , double* out , int n) {
-  auto const block_size = std::min(512, n-4);
-  auto const num_blocks = (n-4)/block_size;
-  static double* buffer = malloc_host<double>((block_size+4)*omp_get_max_threads());
-
-  auto blur = [] (int pos, const double* u) {
-    return 0.25*( u[pos-1] + 2.0*u[pos] + u[pos+1]);
-  };
-
-  @#pragma omp parallel for@
-  for(auto b=0; b<num_blocks; ++b) {
-    auto tid = omp_get_thread_num();
-    auto first = 2 + b*block_size;
-    auto last = first + block_size;
-
-    auto buff = buffer + tid*(block_size+4);
-    for(auto i=first-1, j=1; i<(last+1); ++i, ++j) {
-      buff[j] = blur(i, in);
-    }
-    for(auto i=first, j=2;   i<last;   ++i, ++j) {
-      out[i] = blur(j, buff);
-    }
-  }
-}
-        \end{lstlisting}
-    \end{code}
-\end{frame}
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\begin{frame}[fragile]{}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    \begin{info}{Buffering with shared memory}
-        Shared memory is important for caching intermediate results used in pipelined operations.
-        \begin{itemize}
-            \item Shared memory is an order of magnitude faster than global DRAM.
-            \item By \emph{fusing} pipelined operations in one kernel, intermediate results can be stored in shared memory.
-            \item Similar to blocking and tiling for cache on the CPU.
-        \end{itemize}
-    \end{info}
-
+        \item Fusing these two operations will save us a round trip to global memory.
+    \end{itemize}
 \end{frame}
 
 
@@ -506,7 +488,7 @@ void blur_twice(const double* in , double* out , int n) {
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     \begin{code}{Double blur: CUDA with shared memory}
         \begin{lstlisting}[style=boxcudatiny]
-__global__ void blur_twice(const double *in, double* out, int n) {
+__global__ void blur_twice(const double* in, double* out, int n) {
   extern __shared__ double buffer[];
 
   auto block_start = blockDim.x * blockIdx.x;
@@ -514,7 +496,7 @@ __global__ void blur_twice(const double *in, double* out, int n) {
   auto lid = threadIdx.x + 2;
   auto gid = lid + block_start;
 
-  auto blur = [] (int pos, double const* field) {
+  auto blur = [] (int pos, const double* field) {
     return 0.25*(field[pos-1] + 2.0*field[pos] + field[pos+1]);
   };
 
@@ -535,47 +517,19 @@ __global__ void blur_twice(const double *in, double* out, int n) {
 \end{frame}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\begin{frame}[fragile]{}
+\begin{frame}[fragile]{Dissecting the speedup}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    \begin{info}{Fused loop results}
-        The OpenMP cache-aware version was harder to implement than the shared-memory CUDA version:
+    \begin{itemize}
+        \item These types of kernels do very little math per loaded \lst{double} from global memory
+        \item Total runtime heavily dominated by the global memory bandwidth
         \begin{itemize}
-            \item CUDA seems harder because we have to think and write in parallel from the start.
+            \item Global memory BW: ~500GB/s (P100), ~1320GB/s (A100)
+            \item Shared memory BW: ~8850GB/s (P100), ~18140GB/s (A100)
         \end{itemize}
-        Both implementations benefit significantly from optimizations for fast on chip memory.
-    \end{info}
+    \end{itemize}
     \begin{columns}[T]
-        \begin{column}{0.5\textwidth}
-            \centering
-            \begin{tikzpicture}
-                \begin{axis}[
-                    ybar,
-                    height=0.7\textwidth,
-                    width=\textwidth,
-                    ymin=0,
-                    ymax=30,
-                    %ticks=none,
-                    ytick={0,5,10,15,20,25,30},
-                    title={OpenMP: ms/step},
-                    title style={yshift=-1.5ex},
-                    xtick={0.94, 1.06},
-                    xticklabels={\color{blue}{naive}, \color{green!30!black}{blocked}}
-                ]
-                \addplot
-                    [draw=black, fill=blue!30, bar width=1cm]
-                    coordinates {(1,29.06)};
-                \addplot
-                    [draw=black, fill=green!30, bar width=1cm]
-                    coordinates {(1,13.95)};
-                \node[right] at (axis cs:1,20) {2.1$\times$};
-                \node[above left] at (axis cs:1,23) {\footnotesize29.06};
-                \node[above right] at (axis cs:1,8) {\footnotesize13.95};
-                %\legend{\tiny na\"ive, \tiny optimized};
-                \end{axis}
-            \end{tikzpicture}
-        \end{column}
-
-        \begin{column}{0.5\textwidth}
+        \centering
+        \begin{column}{0.60\textwidth}
             \centering
             \begin{tikzpicture}
                 \begin{axis}[
@@ -586,7 +540,7 @@ __global__ void blur_twice(const double *in, double* out, int n) {
                     %ticks=none,
                     ytick={0,0.5,1,1.5,2,2.5},
                     yticklabels={0,0.5,1.0,1.5,2.0,2.5},
-                    title={CUDA: ms/step},
+                    title={P100: ms/step},
                     title style={yshift=-1.5ex},
                     xtick={0.94, 1.06},
                     xticklabels={\color{blue}{naive}, \color{green!30!black}{shared}}
@@ -601,35 +555,12 @@ __global__ void blur_twice(const double *in, double* out, int n) {
                 \node[right] at (axis cs:1,1.8) {1.7$\times$};
                 \node[above left] at (axis cs:0.99,1.5) {\footnotesize2.23};
                 \node[above right] at (axis cs:1.01,0.75) {\footnotesize1.34};
-                %\legend{\tiny na\"ive, \tiny optimized};
                 \end{axis}
             \end{tikzpicture}
         \end{column}
     \end{columns}
-    {\footnotesize OpenMP results with 18-core Broadwell CPU; CUDA with P100 GPU; $n=33,554,432$}
 \end{frame}
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\begin{frame}[fragile]{}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    \begin{info}{CPU : optimizing for on-chip memory}
-        \begin{itemize}
-            \item let hardware prefetcher automatically manage cache
-            \item choose block/tile sizes so that intermediate data will fit in a target cache (L1, L2 or L3)
-        \end{itemize}
-    \end{info}
-    \begin{info}{GPU : optimizing for on-chip memory}
-        \begin{itemize}
-            \item manage shared memory manually
-            \begin{itemize}
-                \item more control
-                \item hardware-specific
-            \end{itemize}
-            \item choose thread block sizes so that intermediate data will fit into shared memory on an SMX
-        \end{itemize}
-    \end{info}
-
-\end{frame}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]{Exercise: Shared Memory}
@@ -653,19 +584,23 @@ __global__ void blur_twice(const double *in, double* out, int n) {
 \end{frame}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\begin{frame}[fragile]{Communication}
+\begin{frame}[fragile]{Back to Cooperation}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    Communication in a GPU code occurs at different levels:
+    Cooperation in a GPU code can occur at multiple levels:
     \begin{itemize}
-        \item Between threads in a warp;
-        \item Between threads in thread block;
-        \item Between threads in grid;
-        \item Between threads in different grids.
+        \item Intra-block cooperation:
+        \begin{itemize}
+            \item Between threads in a warp;
+            \item Between threads in thread block;
+        \end{itemize}
+        \item Inter-block cooperation:
+        \begin{itemize}
+            \item Between threads in grid;
+            \item Between threads in different kernels.\\
+        \end{itemize}
     \end{itemize}
-    Involves reading and writing shared resources:
-    \begin{itemize}
-        \item Synchronization required if more than one thread wants to modify (write) a shared resource.
-    \end{itemize}
+    \bigskip
+    Synchronization might be required if more than one thread wants to modify (write) one of these shared resources.
 \end{frame}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -769,7 +704,7 @@ int main(void) {
 \end{frame}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\begin{frame}[fragile]{Atomic Operations: motivation}
+\begin{frame}[fragile]{Atomic Operations}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     What is the output of the following code?
     \begin{code}{}
@@ -853,7 +788,7 @@ __device__ int atomicAdd(int *p, int v) {
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]{Atomic Functions}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    CUDA has a range of atomic funtions, including:
+    CUDA has a range of atomic functions, including:
     \begin{itemize}
         \item \emph{Arithmetic}:
             \lstterm{atomicAdd()}, \lstterm{atomicSub()}, \lstterm{atomicMax()}, \lstterm{atomicMin()}, \lstterm{atomicCAS()}, \lstterm{atomicExch()}.
@@ -868,18 +803,26 @@ __device__ int atomicAdd(int *p, int v) {
 \end{frame}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\begin{frame}[fragile]{Atomic Performance}
+\begin{frame}[fragile]{Things to consider}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    Atomic operations are a blunt instrument:
     \begin{itemize}
-        \item Even without contention, atomics are slower than normal accesses (loads, stores);
-        \item Performance can degrade when many threads attempt atomic operations on few memory locations.
-    \end{itemize}
-    Try to avoid or minimise the number of atomic operations.
-    \begin{itemize}
-        \item Attempt to use shared memory and structure algorithms to avoid synchronization wherever possible.
-        \item Try performing operation at warp level or block level.
-        \item Use atomics for infrequent, sparse and/or unpredictable global communication.
+        \item Atomics are slower than normal accesses:
+        \begin{itemize}
+            \item Performance can degrade when many threads attempt atomic operations on few memory locations.
+        \end{itemize}
+        \medskip
+        \item Try to avoid or minimize the number of atomic operations:
+        \begin{itemize}
+            \item Attempt to use shared memory and structure algorithms to avoid synchronization wherever possible.
+            \item Try performing operation at warp level or block level.
+            \item Use atomics for infrequent, sparse and/or unpredictable global communication.
+        \end{itemize}
+        \medskip
+        \item Further reading:
+        \begin{itemize}
+            \item CUDA weakly-ordered memory model
+            \item Memory fence functions
+        \end{itemize}
     \end{itemize}
 \end{frame}
 
@@ -895,23 +838,5 @@ __device__ int atomicAdd(int *p, int v) {
     \item Improve \lstterm{shared/dot.cu} to work for arbitrary $n$
     \end{itemize}
 \end{frame}
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%\begin{frame}[fragile]{Warps}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%    Threads blocks are partitioned into groups of threads called \emph{warps}
-%    \begin{itemize}
-%        \item \lst{auto warp_id = threadIdx.x\%warp_size;}
-%        \item currently \lstterm{warp_size} is 32, however this might change.
-%    \end{itemize}
-%    An SMX schedules warps for execution
-%    \begin{itemize}
-%        \item no overhead for switching between warps
-%        \item when a warp is selected to run, all threads in warp execute the same instruction.
-%    \end{itemize}
-%
-%\end{frame}
-
 
 \end{document}
