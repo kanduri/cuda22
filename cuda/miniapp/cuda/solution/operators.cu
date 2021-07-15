@@ -127,6 +127,41 @@ namespace kernels {
         }
     }
 
+    // stencil implemented with a 1D launch configuration
+    __global__
+     void stencil_interior_1D(double* S, const double *U) {
+         // TODO : implement the interior stencil
+         // EXTRA : can you make it use shared memory?
+         //  S(i,j) = -(4. + alpha) * U(i,j)               // central point
+         //                          + U(i-1,j) + U(i+1,j) // east and west
+         //                          + U(i,j-1) + U(i,j+1) // north and south
+         //                          + alpha * x_old(i,j)
+         //                          + dxs * U(i,j) * (1.0 - U(i,j));
+
+         auto j = threadIdx.x + blockDim.x*blockIdx.x;
+
+         auto nx = params.nx;
+         auto ny = params.ny;
+         auto alpha = params.alpha;
+         auto dxs = params.dxs;
+
+         auto find_pos = [&nx] (size_t i, size_t j) {
+             return i + j * nx;
+         };
+
+         if(j > 0 && j < ny)
+         {
+             for (int i = 1; i < nx; i++)
+             {
+                 auto pos = find_pos(i, j);
+                 S[pos] = -(4. + alpha) * U[pos]
+                         + U[pos-1] + U[pos-nx] + U[pos+nx]
+                         + U[pos+1] + alpha*params.x_old[pos]
+                         + dxs * U[pos] * (1.0 - U[pos]);
+             }
+         }
+     }
+
     __global__
     void stencil_east_west(double* S, const double *U) {
         auto j = threadIdx.x + blockDim.x*blockIdx.x;
@@ -283,6 +318,10 @@ void diffusion(data::Field const& U, data::Field &S)
 #else
     // apply stencil to the interior grid points
     kernels::stencil_interior<<<grid_dim, block_dim>>>(S.device_data(), U.device_data());
+
+    // apply stencil to the interior grid points in 1D launch configuration
+    //auto grid_dim_int = calculate_grid_dim(ny, 64);
+    //kernels::stencil_interior_1D<<<grid_dim_int, 64>>>(S.device_data(), U.device_data());
 
     // apply stencil at east-west boundary
     auto bnd_grid_dim_y = calculate_grid_dim(ny, 64);
