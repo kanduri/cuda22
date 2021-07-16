@@ -192,7 +192,7 @@ __global__ void downsample(const float* in, float* out, int n){
   auto idx = threadIdx.x + blockIdx.x * BSIZE;
 
   // Coalesced reads - no bank conflicts
-  if (idx < n)
+  if (idx * DECIMATE < n)
     buffer[threadIdx.x] = in[idx * DECIMATE];
 
   __syncthreads();
@@ -445,6 +445,21 @@ kernel2(int)
             \item  the \lst{in} and \lst{out} arrays use global indexes\dots
             \item  \dots and the shared memory uses thread block local indexes
         \end{itemize}
+
+    \begin{info}{have a go at the code!}
+        \begin{itemize}
+            \item What's the speedup when using shared memory?
+            \item What is the \lst{blur_shared} kernel assuming?
+            \item Can you break it?
+            \item \emph{Extra}: Modify the \lst{blur_shared} kernel to allocate shared memory dynamically.
+        \end{itemize}
+    \end{info}
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]{Blur kernel results}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
     \begin{info}{and all this for ... no speedup at all?}
         \begin{itemize}
