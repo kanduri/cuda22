@@ -37,7 +37,7 @@
 \author{Sebastian Keller, Javier Otero, Prashanth Kanduri\\ and Ben Cumming, CSCS}
 \title{Writing GPU Kernels}
 \subtitle{}
-\date{\today}
+\date{July 19, 2021}
 
 \begin{document}
 
@@ -46,6 +46,21 @@
 
 % CHAPTER SLIDE
 \cscschapter{Going Parallel : Kernels and Threads}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]{Threads and Kernels}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    \begin{itemize}
+        \item \emph{Threads} are streams of execution, run simultaneously on GPU.
+        \item A \emph{kernel} is the function run by each thread.
+        \item CUDA provides language support for:
+        \begin{itemize}
+            \item writing kernels;
+            \item launching many threads to execute a kernel in parallel.
+        \end{itemize}
+        \item CUDA hides the low-level details of launching threads.
+    \end{itemize}
+\end{frame}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]{Threads and Kernels}
@@ -84,17 +99,43 @@
     $$y_i \leftarrow y_i + a*x_i,\quad i = {0, 1, \dots, n-1}$$
     which can be performed \emph{independently} and \emph{in any order}.
 
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]{Scaled Vector Addition (\axpy)}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    We have used CUBLAS to perform scaled vector addition:
+        $$\mathbf{y} = \mathbf{y} + \alpha \mathbf{x}$$
+        \vspace{-15pt}
+    \begin{itemize}
+        \item $\mathbf{x}$ and $\mathbf{y}$ are vectors of length $n$; \hfill $x,y \in \mathbb{R}^n$
+        \item $\alpha$ is scalar. \hfill $\alpha\in\mathbb{R}$
+    \end{itemize}
+    Applying \axpy requires $n$ operations:
+    $$y_i \leftarrow y_i + a*x_i,\quad i = {0, 1, \dots, n-1}$$
+    which can be performed \emph{independently} and \emph{in any order}.
+
     \begin{code}{\axpy implemented on CPU with a loop}
 %..................................
         \begin{lstlisting}[style=boxcuda]
-void axpy(double *y, const double *x, double a, int n) {
-  for(int i=0; i<n; ++i)
-    y[i] = y[i] + a*x[i];
+void axpy(double* y, const double* x, double a, int n) {
+    for(int i=0; i<n; ++i)
+        y[i] = y[i] + a*x[i];
 }
         \end{lstlisting}
 %..................................
     \end{code}
 
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]{Kernels}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    A \emph{kernel} defines the work item for a single thread
+    \begin{itemize}
+        \item The work is performed by many threads executing the same kernel \emph{simultaneously}.
+        \item Conceptually corresponds to the inner part of a loop for BLAS1 operations like \axpy.
+    \end{itemize}
 \end{frame}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -113,7 +154,7 @@ void axpy(double *y, const double *x, double a, int n) {
 %..................................
         \begin{lstlisting}[style=boxcudatiny]
 
-void add_cpu(int *a, int *b, int n){
+void add_cpu(int* a, int* b, int n){
   for(auto i=0; i<n; ++i)
     a[i] = a[i] + b[i];
 }
@@ -126,7 +167,7 @@ void add_cpu(int *a, int *b, int n){
 %..................................
         \begin{lstlisting}[style=boxcudatiny]
 __global__
-void add_gpu(int *a, int *b, int n){
+void add_gpu(int* a, int* b, int n){
   auto i = threadIdx.x;
   a[i] = a[i] + b[i];
 }
@@ -193,7 +234,7 @@ add_gpu@<<<@1,n@>>>@(a, b, n);
     \begin{enumerate}
         \item Write a kernel that implements \axpy for \lst{double}
         \begin{itemize}
-            \item \lst{axpy_kernel(double *y, double *x, double a, int n)}
+            \item \lst{axpy_kernel(double* y, double* x, double a, int n)}
             \item \extra can you write a C++ templated version for any type?
         \end{itemize}
 
@@ -349,7 +390,7 @@ add_gpu@<<<@1,n@>>>@(a, b, n);
 %..................................
         \begin{lstlisting}[style=boxcudatiny]
 __global__
-void add_gpu(int *a, int *b, int n){
+void add_gpu(int* a, int* b, int n){
   auto i = threadIdx.x + blockIdx.x*blockDim.x;
   if(i<n) { // guard against access off end of arrays
     a[i] += b[i];
