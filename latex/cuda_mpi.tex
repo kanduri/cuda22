@@ -34,8 +34,8 @@
 % Please use the predifined colors:
 % cscsred, cscsgrey, cscsgreen, cscsblue, cscsbrown, cscspurple, cscsyellow, cscsblack, cscswhite
 
-\author{Ben Cumming, CSCS}
-\title{Introduction to GPUs in HPC}
+\author{Sebastian Keller, Javier Otero, Prashanth Kanduri\\ and Ben Cumming, CSCS}
+\title{Advanced Features Overview}
 \subtitle{}
 \date{\today}
 
@@ -128,10 +128,8 @@ hello world from 3 of 4 on nid02120
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]{MPI with data in device memory}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    Use GPUs to parallelize on-node computation
-    \begin{itemize}
-        \item \dots and MPI for communication between nodes.
-    \end{itemize}
+    Use GPUs to parallelize on-node computation and MPI for communication between nodes.\\
+    \medskip
     To use with data that is in buffers in GPU memory:
     \begin{enumerate}
         \item Allocate buffers in host memory;
@@ -139,7 +137,8 @@ hello world from 3 of 4 on nid02120
         \item Perform MPI communication with host buffers;
         \item Copy received data from host$\rightarrow$device memory.
     \end{enumerate}
-    This approach can be very fast.
+    \medskip
+    A potential optimization:
     \begin{itemize}
         \item Have a CPU thread dedicated to asynchronous host$\leftrightarrow$device and MPI communication
     \end{itemize}
@@ -172,7 +171,7 @@ hello world from 3 of 4 on nid02120
     \begin{itemize}
         \item Set the environment variable \lst{export MPICH_RDMA_ENABLED_CUDA=1}
         \begin{itemize}
-            \item If not set, MPI assumes that all pointers are to host memory, and your application will probably crash with segmentation faults
+            \item MPI will assume that all pointers are to host memory if this is not set
         \end{itemize}
         \item Experiment with the environment variable \lst{MPICH_G2G_PIPELINE}
         \begin{itemize}
@@ -195,19 +194,6 @@ MPI_Isend(send_data, 100, MPI_DOUBLE, target, tag, MPI_COMM_WORLD, &srequest);
 \end{frame}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\begin{frame}[fragile]{Capabilities and Limitations}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    \begin{itemize}
-        \item Support for most MPI API calls (point-to-point, collectives, etc)
-        \item Robust support for common MPI API calls
-        \begin{itemize}
-            \item i.e. point-to-point operations 
-        \end{itemize}
-        \item No support for user-defined MPI data types
-    \end{itemize}
-\end{frame}
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]{Exercise: MPI with G2G}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     \begin{itemize}
@@ -221,7 +207,6 @@ MPI_Isend(send_data, 100, MPI_DOUBLE, target, tag, MPI_COMM_WORLD, &srequest);
         \begin{itemize}
             \item what happens if you don't set \lstterm{MPICH_RDMA_ENABLED_CUDA}?
         \end{itemize}
-    \item \emph{Extra++:} find the nasty performance bug...
     \end{itemize}
 
     \begin{terminal}{}
@@ -267,8 +252,8 @@ sbatch job.batch
 \begin{frame}[fragile]{Using Unified Memory with MPI}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     \begin{itemize}
-        \item To pass a managed pointer to MPI you must use a GPU-aware MPI distribution.
-        \item Even if the managed memory is on the host at time of calling.
+        \item To pass a managed pointer to MPI you must use a GPU-aware MPI distribution
+        \item Even if the managed memory is on the host at time of calling
     \end{itemize}
 
     \begin{columns}[T]
@@ -277,8 +262,8 @@ sbatch job.batch
                 \item The MPI implementation uses page-locked (pinned) memory for RDMA.
                 \item If not aware of unified memory you get
                 \begin{itemize}
-                    \item if lucky: crashes.
-                    \item if unlucky: infuriating bugs.
+                    \item if lucky: crashes
+                    \item if unlucky: unexpected behavior
                 \end{itemize}
             \end{itemize}
         \end{column}
