@@ -66,6 +66,7 @@ int main(int argc, char** argv)
 
     // fill a vector with random values
     thrust::host_vector<double> values_host(n);
+    std::generate(values_host.begin(), values_host.end(), drand48);
 
     // start the nvprof profiling
     cudaProfilerStart();

@@ -16,16 +16,13 @@ void benchmark_gpu(thrust::host_vector<double> values_host)
 
     auto start = get_time();
 
-    // copy values to device
-    values_device = values_host;
+    // TODO: copy values to device
     auto h2d_time = get_time() - start;
 
-    // sort values
-    thrust::sort(thrust::device, values_device.begin(), values_device.end());
+    // TODO: sort values on device
     auto sort_time = get_time() - h2d_time;
 
-    // copy result back to host
-    values_host     = values_device;
+    // TODO: copy result back to host
     auto time_taken = get_time() - start;
 
     std::cout << "gpu performance including transfers: " << n / time_taken / 1e6 << " million keys/s\n";
@@ -66,6 +63,7 @@ int main(int argc, char** argv)
 
     // fill a vector with random values
     thrust::host_vector<double> values_host(n);
+    std::generate(values_host.begin(), values_host.end(), drand48);
 
     // start the nvprof profiling
     cudaProfilerStart();
