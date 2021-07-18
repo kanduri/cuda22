@@ -8,6 +8,34 @@
 
 #include "util.hpp"
 
+void benchmark_gpu(thrust::host_vector<double> values_host)
+{
+    // fill a vector with random values
+    size_t n = values_host.size();
+    thrust::device_vector<double> values_device(n);
+
+    auto start = get_time();
+
+    // copy values to device
+    values_device = values_host;
+    auto h2d_time = get_time() - start;
+
+    // sort values
+    thrust::sort(thrust::device, values_device.begin(), values_device.end());
+    auto sort_time = get_time() - h2d_time;
+
+    // copy result back to host
+    values_host     = values_device;
+    auto time_taken = get_time() - start;
+
+    std::cout << "gpu performance including transfers: " << n / time_taken / 1e6 << " million elements/s\n";
+    std::cout << "gpu performance without transfers: " << n / sort_time / 1e6 << " million elements/s\n";
+
+    // check for errors
+    bool pass = std::is_sorted(values_host.begin(), values_host.end());
+    std::cout << "gpu sort: " << (pass ? "passed\n\n" : "failed\n\n");
+}
+
 int main(int argc, char** argv) {
     size_t pow = read_arg(argc, argv, 1, 16);
     size_t n = 1 << pow;
@@ -19,32 +47,14 @@ int main(int argc, char** argv) {
 
     // fill a vector with random values
     thrust::host_vector<double>   values_host(n);
-    thrust::device_vector<double> values_device(n);
 
     // start the nvprof profiling
     cudaProfilerStart();
 
-    // copy values to device
-    auto start = get_time();
-    values_device = values_host;
-
-    // sort values
-    thrust::sort(thrust::device, values_device.begin(), values_device.end());
-
-    auto time_taken = get_time() - start;
-
-    std::cout << "time : " << time_taken << "s\n";
-
-    // copy result back to host
-    values_host = values_device;
-
-    // check for errors
-    bool pass = std::is_sorted(values_host.begin(), values_host.end());
+    benchmark_gpu(values_host);
 
     // stop the profiling session
     cudaProfilerStop();
-
-    std::cout << (pass ? "passed\n" : "failed\n");
 
     return 0;
 }
