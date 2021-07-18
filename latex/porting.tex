@@ -261,21 +261,22 @@
 
     \begin{terminal}{}
         \begin{lstlisting}[style=terminal]
-# log on to daint with your course username & password
+# log on to daint (from ela.cscs.ch) with your course username & password
 > ssh -X <your account name>@daint
 
 # get one node on the course reservation for 60 minutes
-> salloc -Cgpu --reservation=summer_school -t60
+# find your group id with the "groups" command
+> salloc -A <your group> -C gpu --reservation=summerschool -t60
 
 # go to scratch and get the course material
-> cd $SCRATCH/SummerSchool2020
+> cd $SCRATCH/SummerSchool2021
 > git pull
 
 # compile and test the demo
 > cd topics/cuda/practicals/demos
 > cat hello.cu
-> module load gcc cudatoolkit
-> nvcc -arch=sm_60 hello.cu -o hello
+> module load gcc/9.3.0 cudatoolkit
+> nvcc hello.cu -o hello
 > srun ./hello
         \end{lstlisting}
     \end{terminal}
