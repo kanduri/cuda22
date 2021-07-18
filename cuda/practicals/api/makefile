@@ -5,7 +5,7 @@ GCC_FLAGS=-std=c++11 -O3 -fopenmp ${CRAY_CUDATOOLKIT_INCLUDE_OPTS}
 GCC_LINK=-lcublas -lcuda ${CRAY_CUDATOOLKIT_POST_LINK_OPTS}
 
 
-CUDA_BENCHMARKS=explicit managed
+CUDA_BENCHMARKS=explicit managed sort
 
 BENCHMARKS=$(CUDA_BENCHMARKS)
 
@@ -16,6 +16,9 @@ explicit : explicit.cu util.hpp
 
 managed : managed.cu util.hpp
 	nvcc $(NVCC_FLAGS) managed.cu -o managed $(NVCC_LINK)
+
+sort : sort.cu util.hpp
+	nvcc $(NVCC_FLAGS) sort.cu -o sort $(NVCC_LINK)
 
 clean :
 	rm -f $(BENCHMARKS) *.nvvp
