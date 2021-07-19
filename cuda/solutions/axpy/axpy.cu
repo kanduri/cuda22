@@ -12,6 +12,25 @@ void axpy(int n, double alpha, const double* x, double* y) {
     }
 }
 
+// Extra: Dealing with arrays larger than 1024 using a single block.
+// Comment previous definition to use this.
+/*
+__global__
+void axpy(int n, double alpha, const double* x, double* y)
+{
+    auto i = threadIdx.x;
+    int k = (n + 1024 - 1)/1024;
+    for (int j = 0; j < k; j++)
+    {
+        auto index = 1024*j + i;
+        if (index < n)
+        {
+            y[index] = y[index] + alpha*x[index];
+        }
+    }
+}
+*/
+
 int main(int argc, char** argv) {
     size_t pow = read_arg(argc, argv, 1, 16);
     size_t n = 1 << pow;
