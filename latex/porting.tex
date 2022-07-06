@@ -34,7 +34,7 @@
 % Please use the predifined colors:
 % cscsred, cscsgrey, cscsgreen, cscsblue, cscsbrown, cscspurple, cscsyellow, cscsblack, cscswhite
 
-\author{Sebastian Keller, Javier Otero, Prashanth Kanduri\\ and Ben Cumming, CSCS}
+\author{Sebastian Keller, Prashanth Kanduri\\ and Ben Cumming, CSCS}
 \title{Introduction to GPUs in HPC}
 \subtitle{}
 %\date{\today}
@@ -107,59 +107,59 @@
 
     \begin{itemize}
         \item Questions 1, 2 and 3 will be discussed in this course.
-        \item Question 4 will be considered briefly here.
+        %\item Question 4 will be considered briefly here.
         \item Questions 5 requires answers for 1--4.
     \end{itemize}
 \end{frame}
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\begin{frame}[fragile]{Limitations to parallel speedup}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    \begin{itemize}
-        \item
-            Parallel speedup is limited by\ \emph{the proportion of serial work} in your code.
-        \item
-            \emph{Amdahl's law} defines the \emph{maximum possible speedup} when only parts of the code can be parallelised
-            \begin{equation*}
-                t_n = t_1 \left( p+\frac{(1-p)}{n} \right),
-            \end{equation*}
-            where $t_n$ is time to solution for $n$ threads and $p\in[0,1]$ is the proportion of sequential code.
-        \item The limit on time to solution is $\lim_{n\to\infty}=p t_1$
-        \begin{itemize}
-            \item e.g. 1\% of serial code gives a maximum 100$\times$ speedup.
-        \end{itemize}
-    \end{itemize}
-\end{frame}
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\begin{frame}[fragile]{Amdahl illustrated}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\begin{tikzpicture}
-    \pgfplotsset{footnotesize}
-    \begin{axis}[
-        height=0.6\textwidth,
-        width=\textwidth,
-        xmin=1,xmax=128,
-        ymin=0,ymax=128,
-        xtick={10,20,30,40,50,60,70,80,90,100,110,120,130},
-        %ytick={0,1,2,3,4,5,6,7,8},
-        xlabel=threads,
-        ylabel=speedup,
-        legend style = {at={(0,1)}, anchor=north west},
-        every axis y label/.style=
-            {at={(ticklabel cs:0.5)},rotate=90,anchor=near ticklabel},
-        grid=major]
-        \addplot[color=blue,thick]  table[x=n,y=effec50]  {./plots/amdahl.tbl};
-        \addplot[color=red,thick]  table[x=n,y=effec80]  {./plots/amdahl.tbl};
-        \addplot[color=green!50!black,thick]  table[x=n,y=effec90]  {./plots/amdahl.tbl};
-        \addplot[color=purple,thick]  table[x=n,y=effec95]  {./plots/amdahl.tbl};
-        \addplot[color=black,thick]  table[x=n,y=effec98]  {./plots/amdahl.tbl};
-        \addplot[color=cyan,thick]  table[x=n,y=effec99]  {./plots/amdahl.tbl};
-        \addplot[color=black,dashed,thick]  table[x=n,y=effec100]  {./plots/amdahl.tbl};
-        \legend{50\%, 80\%, 90\%, 95\%, 98\%, 99\%, perfect};
-    \end{axis}
-\end{tikzpicture}
-\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\begin{frame}[fragile]{Limitations to parallel speedup}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    \begin{itemize}
+%        \item
+%            Parallel speedup is limited by\ \emph{the proportion of serial work} in your code.
+%        \item
+%            \emph{Amdahl's law} defines the \emph{maximum possible speedup} when only parts of the code can be parallelised
+%            \begin{equation*}
+%                t_n = t_1 \left( p+\frac{(1-p)}{n} \right),
+%            \end{equation*}
+%            where $t_n$ is time to solution for $n$ threads and $p\in[0,1]$ is the proportion of sequential code.
+%        \item The limit on time to solution is $\lim_{n\to\infty}=p t_1$
+%        \begin{itemize}
+%            \item e.g. 1\% of serial code gives a maximum 100$\times$ speedup.
+%        \end{itemize}
+%    \end{itemize}
+%\end{frame}
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\begin{frame}[fragile]{Amdahl illustrated}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\begin{tikzpicture}
+%    \pgfplotsset{footnotesize}
+%    \begin{axis}[
+%        height=0.6\textwidth,
+%        width=\textwidth,
+%        xmin=1,xmax=128,
+%        ymin=0,ymax=128,
+%        xtick={10,20,30,40,50,60,70,80,90,100,110,120,130},
+%        %ytick={0,1,2,3,4,5,6,7,8},
+%        xlabel=threads,
+%        ylabel=speedup,
+%        legend style = {at={(0,1)}, anchor=north west},
+%        every axis y label/.style=
+%            {at={(ticklabel cs:0.5)},rotate=90,anchor=near ticklabel},
+%        grid=major]
+%        \addplot[color=blue,thick]  table[x=n,y=effec50]  {./plots/amdahl.tbl};
+%        \addplot[color=red,thick]  table[x=n,y=effec80]  {./plots/amdahl.tbl};
+%        \addplot[color=green!50!black,thick]  table[x=n,y=effec90]  {./plots/amdahl.tbl};
+%        \addplot[color=purple,thick]  table[x=n,y=effec95]  {./plots/amdahl.tbl};
+%        \addplot[color=black,thick]  table[x=n,y=effec98]  {./plots/amdahl.tbl};
+%        \addplot[color=cyan,thick]  table[x=n,y=effec99]  {./plots/amdahl.tbl};
+%        \addplot[color=black,dashed,thick]  table[x=n,y=effec100]  {./plots/amdahl.tbl};
+%        \legend{50\%, 80\%, 90\%, 95\%, 98\%, 99\%, perfect};
+%    \end{axis}
+%\end{tikzpicture}
+%\end{frame}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]{CUDA}
@@ -201,16 +201,16 @@
     \end{itemize}
 \end{frame}
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\begin{frame}[fragile]{Compiling CUDA with Clang}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    Clang now supports compilation of CUDA code, targetting NVIDIA GPUs.
-    \begin{itemize}
-        \item Performance of the generated code is on par with nvcc.
-        \item It is a good idea to test your CUDA code with both Clang and nvcc.
-        \item The most recent version of the Cray C++ compiler on Daint is Clang based.
-    \end{itemize}
-\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\begin{frame}[fragile]{Compiling CUDA with Clang}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    Clang now supports compilation of CUDA code, targetting NVIDIA GPUs.
+%    \begin{itemize}
+%        \item Performance of the generated code is on par with nvcc.
+%        \item It is a good idea to test your CUDA code with both Clang and nvcc.
+%        \item The most recent version of the Cray C++ compiler on Daint is Clang based.
+%    \end{itemize}
+%\end{frame}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]{Compiling CUDA}
@@ -238,21 +238,21 @@
     \end{itemize}
 \end{frame}
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\begin{frame}[fragile]{Compiling CUDA with Clang}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    Compilation with Clang uses different gpu-specific options:
-
-    \vspace{20pt}
-    \begin{terminal}{}
-    \begin{lstlisting}[style=terminal]
-> CC -xcuda --cuda-gpu-arch=sm_60 --cuda-path=$CUDA_ROOT
-          -O2 -std=c++11 -g -o foo foo.cu
-    \end{lstlisting}
-    \end{terminal}
-    \vspace{20pt}
-    Where \lst{CC} is the Cray compiler wrapper on Daint.
-\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\begin{frame}[fragile]{Compiling CUDA with Clang}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    Compilation with Clang uses different gpu-specific options:
+%
+%    \vspace{20pt}
+%    \begin{terminal}{}
+%    \begin{lstlisting}[style=terminal]
+%> CC -xcuda --cuda-gpu-arch=sm_60 --cuda-path=$CUDA_ROOT
+%          -O2 -std=c++11 -g -o foo foo.cu
+%    \end{lstlisting}
+%    \end{terminal}
+%    \vspace{20pt}
+%    Where \lst{CC} is the Cray compiler wrapper on Daint.
+%\end{frame}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]{Exercise: Getting Started on Piz Daint}
@@ -269,7 +269,7 @@
 > salloc -A <your group> -C gpu --reservation=summerschool -t60
 
 # go to scratch and get the course material
-> cd $SCRATCH/SummerSchool2021
+> cd $SCRATCH/SummerUniversity2022
 > git pull
 
 # compile and test the demo

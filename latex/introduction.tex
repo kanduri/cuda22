@@ -34,7 +34,7 @@
 % Please use the predifined colors:
 % cscsred, cscsgrey, cscsgreen, cscsblue, cscsbrown, cscspurple, cscsyellow, cscsblack, cscswhite
 
-\author{Sebastian Keller, Javier Otero, Prashanth Kanduri\\ and Ben Cumming, CSCS}
+\author{Sebastian Keller, Prashanth Kanduri\\ and Ben Cumming, CSCS}
 \title{Introduction to GPUs in HPC\\CSCS Summer School 2020}
 \subtitle{}
 %\date{\today}
@@ -55,7 +55,7 @@
         \item Implement parallel CUDA kernels for simple linear algebra;
         \item Learn how to scale our parallel kernels to utilize all resources on the GPU;
         \item Learn about thread cooperation and synchronization;
-        \item Learn about concurrent task-based parallelism;
+        %\item Learn about concurrent task-based parallelism;
         \item Learn how to profile GPU applications.
         \item Port the miniapp to the GPU.
     \end{itemize}
@@ -64,15 +64,15 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]{Course Overview}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    We focus on HPC and modern GPU architectures, specifically:
+    We focus on HPC and GPU architectures, specifically:
     \begin{itemize}
         \item HPC development for P100 GPUs on Piz Daint;
-        \item Using CUDA toolkit version 10 and above;
+        \item Using CUDA toolkit version 11 and above;
         \item Some are available on P100 and later GPUs.
         \begin{itemize}
             \item  e.g. double precision atomics.
         \end{itemize}
-        \item Likewise, we won't be covering some features that are available on the latest ``Volta'' GPUs.
+        \item Likewise, we won't be covering some features that are available on the latest ``Ampere'' GPUs.
     \end{itemize}
 \end{frame}
 

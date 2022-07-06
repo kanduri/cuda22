@@ -34,7 +34,7 @@
 % Please use the predifined colors:
 % cscsred, cscsgrey, cscsgreen, cscsblue, cscsbrown, cscspurple, cscsyellow, cscsblack, cscswhite
 
-\author{Sebastian Keller, Javier Otero, Prashanth Kanduri\\ and Ben Cumming, CSCS}
+\author{Sebastian Keller, Prashanth Kanduri\\ and Ben Cumming, CSCS}
 \title{CUDA runtime API and core libraries}
 \subtitle{}
 \date{\today}
@@ -45,10 +45,34 @@
 \cscstitle
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]{The software ecosystem on top of CUDA}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    \begin{center}
+        \includegraphics[width=\textwidth]{./images/gpu_platform.pdf}
+    \end{center}
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]{The software ecosystem on top of CUDA}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    \begin{center}
+        \includegraphics[width=\textwidth]{./images/gpu_layers.pdf}
+    \end{center}
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]{Hardware and memory on a Piz Daint Node}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     \begin{center}
         \includegraphics[width=0.9\textwidth]{./images/node.pdf}
+    \end{center}
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]{Hardware and memory on a Piz Daint Node}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    \begin{center}
+        \includegraphics[width=0.9\textwidth]{./images/node_annotated.pdf}
     \end{center}
 \end{frame}
 
@@ -306,6 +330,22 @@ is now offered in two new tools:
   \end{itemize}
 \end{info}
 
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]{Using CUDA libraries}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    \begin{center}
+        \includegraphics[width=0.9\textwidth]{./image_png/nvidia_libraries.png}
+    \end{center}
+Managing GPU memory with allocations and data transfers is already enough to
+call various GPU libraries, such as:
+\begin{itemize}
+  \item sorting, reductions, prefix sums
+  \item linear algebra and solvers
+  \item FFT
+  \item etc...
+\end{itemize}
 \end{frame}
 
 
