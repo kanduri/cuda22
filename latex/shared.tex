@@ -208,7 +208,7 @@ __global__ void downsample(const float* in, float* out, int n){
   __syncthreads();
 
   // Coalesced writes
-  if (idx < n)
+  if (idx < n/DECIMATE)
     out[idx] = buffer[threadIdx.x];
 }
         \end{lstlisting}
