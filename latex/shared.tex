@@ -303,7 +303,7 @@ blur(const double* in, double* out, int n) {
     \begin{enumerate}
         \item Load \lst{in[i]} into shared memory \lst{buffer[i]}.
         \begin{itemize}
-            \item One thread has to load \lst{in[0]} \& \lst{in[n]}.
+            \item One thread has to load \lst{in[0]} \& \lst{in[n-1]}.
         \end{itemize}
         \item Use values \lst{buffer[i-1:i+1]} to compute kernel.
     \end{enumerate}
