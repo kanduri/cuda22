@@ -421,6 +421,51 @@ blur_shared@<<<@1, block_dim, size_in_bytes@>>>@(x0, x1, n);
 
 \end{frame}
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]{Launching with static shared memory}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    It is possible to allocate multiple variables as shared memory.
+    \begin{itemize}
+        \item   If the shared memory is used separately, you can use a union to ``overlap'' the storage.
+        \item   Shared memory is a limited resource.
+    \end{itemize}
+
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{code}{separate storage}
+                \begin{lstlisting}[style=boxcudatiny]
+__global__
+void kernel1() {
+  // 1536 bytes
+  __shared__ int X[128];
+  __shared__ double Y[128];
+
+  // OK
+  X[i] = (int)Y[i];
+}
+                 \end{lstlisting}
+            \end{code}
+        \end{column}
+
+        \begin{column}{0.48\textwidth}
+            \begin{code}{overlapping storage}
+                \begin{lstlisting}[style=boxcudatiny]
+__global__
+void kernel2(int n) {
+  // 1024 bytes
+  __shared__ union {
+    int X[128];
+    double Y[128];
+  } buf;
+
+  // not OK
+  buf.X[i] = (int)buf.Y[i];
+}
+                \end{lstlisting}
+            \end{code}
+        \end{column}
+    \end{columns}
+\end{frame}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]{Finding resource usage of kernels}
