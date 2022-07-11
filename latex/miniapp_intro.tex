@@ -155,7 +155,7 @@
 % Please use the predifined colors:
 % cscsred, cscsgrey, cscsgreen, cscsblue, cscsbrown, cscspurple, cscsyellow, cscsblack, cscswhite
 
-\author{Sebastian Keller, Javier Otero, Prashanth Kanduri\\ and Ben Cumming, CSCS}
+\author{Sebastian Keller, Prashanth Kanduri\\ and Ben Cumming, CSCS}
 \title{Introduction to the Summer School MiniApp}
 \subtitle{}
 \date{July 21, 2021}
@@ -446,7 +446,7 @@ simulation took 1.07502 seconds
 \end{frame}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\begin{frame}[fragile]{Exercise: visualize the reults}
+\begin{frame}[fragile]{Exercise: Visualize the results}
     \begin{itemize}
         \item The application generates two data files with the final solution: \lst{output.bin} and \lst{output.bov}.
         \item There is a Python script that will show a contour plot  of the solution.
@@ -454,7 +454,9 @@ simulation took 1.07502 seconds
     \end{itemize}
 \begin{lstlisting}[style=terminal]
 > module load daint-gpu
-> module load PyExtensions/python3-CrayGNU-20.11
+> module load cray-python
+> module load matplotlib
+> export MPLBACKEND="TkAgg"
 > python3 ./plotting.py -s  # -s to get image in pop up
 \end{lstlisting}
 \end{frame}
