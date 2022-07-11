@@ -140,9 +140,7 @@ srun diffusion2d 8 1000000
 
 # Do the plotting
 module load daint-gpu
-module load cray-python
-module load matplotlib
-export MPLBACKEND="TkAgg"
+module load jupyterlab
 python plotting.py -s
         \end{lstlisting}
     \end{terminal}
